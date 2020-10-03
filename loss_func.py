@@ -36,7 +36,7 @@ class BCEDiceLoss(nn.Module):
         intersection = (input * target)
         dice = (2 * intersection.sum(1) + smooth) / (input.sum(1) + target.sum(1) + smooth)
 
-        return alpha * bce + beta * (1-dice)
+        return alpha * bce + beta * (1-dice.mean())
 
 class DiceLoss(nn.Module):
     def __init__(self):
