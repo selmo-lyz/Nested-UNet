@@ -5,16 +5,18 @@ import torch
 from torch.utils.data import Dataset
 
 class lcdDataset(Dataset):
-    def __init__(self, data, label, data_list):
+    def __init__(self, data, label, data_list, crop_size=512, have_nd=True):
         self.data = data
         self.label = label
         self.csv = data_list
+        self.crop_size = crop_size
+        self.have_nd = have_nd
 
     def __getitem__(self, index):
         data = self.data[index]
         label = self.label[index]
 
-        Y,X = data.shape[1]
+        X = data.shape[1]
 
         def rotate(image, angle, value, center=None, scale=1):
             '''
@@ -37,23 +39,26 @@ class lcdDataset(Dataset):
 
             return rotated       
 
-        if X != 512:
+        # random crop
+        if X != self.crop_size:
             nd = False
             while not nd:
-                start = random.randint(0, X-512)
+                start = random.randint(0, X-self.crop_size)
 
-                data = data[0:512,start:start+512]
-                label = label[0:512,start:start+512]
+                data = data[0:self.crop_size,start:start+self.crop_size]
+                label = label[0:self.crop_size,start:start+self.crop_size]
 
                 for nodules_coord in range(5, len(self.csv[index])):
                     x_nd = self.csv[index][nodules_coord]
                     if x_nd == '':
                         break
-                    if start <= float(x_nd) and float(x_nd) < (start+512):
+                    if start <= float(x_nd) and float(x_nd) < (start+self.crop_size):
                         nd = True
                         break
 
-                if not nd:
+                if not self.have_nd:
+                    break
+                elif not nd:
                     data = self.data[index]
                     label = self.label[index]
 
