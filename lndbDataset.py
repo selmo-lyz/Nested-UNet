@@ -16,7 +16,7 @@ class lcdDataset(Dataset):
         data = self.data[index]
         label = self.label[index]
 
-        X = data.shape[1]
+        Y, X = data.shape
 
         def rotate(image, angle, value, center=None, scale=1):
             '''
@@ -43,24 +43,20 @@ class lcdDataset(Dataset):
         if X != self.crop_size:
             nd = False
             while not nd:
-                start = random.randint(0, X-self.crop_size)
+                origin_x = random.randint(0, X - self.crop_size)
+                origin_y = random.randint(0, Y - self.crop_size)
 
-                data = data[0:self.crop_size,start:start+self.crop_size]
-                label = label[0:self.crop_size,start:start+self.crop_size]
+                t_data = data[origin_y:origin_y+self.crop_size, origin_x:origin_x+self.crop_size]
+                t_label = label[origin_y:origin_y+self.crop_size, origin_x:origin_x+self.crop_size]
 
-                for nodules_coord in range(5, len(self.csv[index])):
-                    x_nd = self.csv[index][nodules_coord]
-                    if x_nd == '':
-                        break
-                    if start <= float(x_nd) and float(x_nd) < (start+self.crop_size):
-                        nd = True
-                        break
+                if np.any(t_label > 0):
+                    data = t_data
+                    label = t_label
+                    nd = True
+                    break
 
                 if not self.have_nd:
                     break
-                elif not nd:
-                    data = self.data[index]
-                    label = self.label[index]
 
         # 隨機進行水平翻轉
         rand = random.uniform(0,1)

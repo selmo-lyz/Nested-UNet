@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     # hyperparameters
     learning_rate = 3e-4
-    batch_size = 4
+    batch_size = 32
     num_epoch = 1000
 
     # setting
@@ -60,8 +60,8 @@ if __name__ == "__main__":
         idx_epoch = 0
 
         for train_idx, valid_idx in kf.split(tr_data):
-            ds_train = lcdDataset([tr_data[i] for i in train_idx], [tr_label[i] for i in train_idx], data_list[train_idx])
-            ds_valid = lcdDataset([tr_data[i] for i in valid_idx], [tr_label[i] for i in valid_idx], data_list[valid_idx])
+            ds_train = lcdDataset([tr_data[i] for i in train_idx], [tr_label[i] for i in train_idx], data_list[train_idx], 64, True)
+            ds_valid = lcdDataset([tr_data[i] for i in valid_idx], [tr_label[i] for i in valid_idx], data_list[valid_idx], 64, True)
             dl_train = DataLoader(dataset=ds_train, batch_size=batch_size, shuffle=True)
             dl_valid = DataLoader(dataset=ds_valid, batch_size=batch_size, shuffle=True)
 
@@ -78,6 +78,7 @@ if __name__ == "__main__":
                     pred += sigmoid(output[i])
                 pred /= 4
                 loss = criterion(pred.squeeze(), mask.squeeze(), 0.5, 1, 1e-5)
+                sum_loss += loss
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -102,7 +103,6 @@ if __name__ == "__main__":
                         val_loss_list[i] += jaccard_score(mask_gt.flatten(), pred.flatten())
             end_epoch = time.time()
             print("ValidLoss: {} - {} s/epoch".format(val_loss_list/len(dl_valid), end_epoch - begin_epoch))
-
 
             torch.save(model.state_dict(), './ckp/model_parameters/unet_param_epoch_{}.pkl'.format(epoch+idx_epoch+1))
             torch.save(optimizer, './ckp/optimizer/optimizer_epoch_{}.pkl'.format(epoch+idx_epoch+1))
