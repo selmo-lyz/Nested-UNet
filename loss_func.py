@@ -19,24 +19,19 @@ class BCEDiceLoss(nn.Module):
 
         References:
         https://arxiv.org/pdf/1807.10165.pdf
-        https://github.com/MrGiovanni/UNetPlusPlus/blob/dbe3806d7e859f1691c5f7816e756923fd0786b7/helper_functions.py#L47
+        https://github.com/MrGiovanni/UNetPlusPlus/blob/dbe3806d7e859f1691c5f7816e756923fd0786b7/helper_functions.py#L47/blob/dbe3806d7e859f1691c5f7816e756923fd0786b7/helper_functions.py#L47
         '''
-        # get batch
-        batch_size = target.size(0)
-        # get probability
-        input = torch.sigmoid(input)
-        # flatten
-        input = input.view(batch_size, -1)
-        target = target.view(batch_size, -1)
-
         # binary cross entropy
-        bce = F.binary_cross_entropy(input, target)
+        bce = F.binary_cross_entropy(input, target))
 
+        # flatten
+        input = input.view(-1)
+        target = target.view(-1)
         # dice coefficent
         intersection = (input * target)
-        dice = (2 * intersection.sum(1) + smooth) / (input.sum(1) + target.sum(1) + smooth)
+        dice = (2 * intersection.sum() + smooth) / (input.sum() + target.sum() + smooth)/ (input.sum(1) + target.sum(1) + smooth)
 
-        return alpha * bce + beta * (1-dice.mean())
+        return alpha * bce - beta * dice
 
 class DiceLoss(nn.Module):
     def __init__(self):
@@ -57,7 +52,7 @@ class DiceLoss(nn.Module):
         # get batch
         batch_size = target.size(0)
         # get probability
-        input = torch.sigmoid(input)
+        #input = torch.sigmoid(input)
         # flatten
         input = input.view(batch_size, -1)
         target = target.view(batch_size, -1)

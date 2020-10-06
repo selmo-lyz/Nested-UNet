@@ -3,7 +3,6 @@ import numpy as np
 import time
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from utils import readMhd, readCsv
 from lndbDataset import lcdDataset
@@ -43,8 +42,9 @@ if __name__ == "__main__":
     print("amount of parameters: {}".format(count_params(model)))
 
     # hyperparameters
-    learning_rate = 1e-4
-    batch_size = 4
+    learning_rate = 3e-4
+    batch_size = 32
+    crop_size = 64
     num_epoch = 1000
 
     # setting
@@ -61,25 +61,25 @@ if __name__ == "__main__":
         idx_epoch = 0
 
         for train_idx, valid_idx in kf.split(tr_data):
-            ds_train = lcdDataset([tr_data[i] for i in train_idx], [tr_label[i] for i in train_idx], data_list[train_idx])
-            ds_valid = lcdDataset([tr_data[i] for i in valid_idx], [tr_label[i] for i in valid_idx], data_list[valid_idx])
+            ds_train = lcdDataset([tr_data[i] for i in train_idx], [tr_label[i] for i in train_idx], data_list[train_idx], 64, True)
+            ds_valid = lcdDataset([tr_data[i] for i in valid_idx], [tr_label[i] for i in valid_idx], data_list[valid_idx], 64, True)
             dl_train = DataLoader(dataset=ds_train, batch_size=batch_size, shuffle=True)
             dl_valid = DataLoader(dataset=ds_valid, batch_size=batch_size, shuffle=True)
 
             model.train()
             begin_epoch = time.time() 
-            sum_loss_list = np.array([0,0,0,0], dtype=np.float32)
+            sum_loss = 0
             for idx, (data, mask) in enumerate(dl_train):
-                data = data.to(device)
-                mask = mask.to(device)
+                data = data.reshape(data.size()[0], 1, crop_size, crop_size).to(device).float()
+                mask = mask.to(device).float()
 
                 output = model(data)
-                loss = 0
+                pred = 0
                 for i in range(4):
-                    tloss = criterion(output[i].squeeze(), mask.squeeze(), 0.5, 1)
-                    loss += tloss
-                    sum_loss_list[i] += tloss
-                loss /= 4
+                    pred += sigmoid(output[i])
+                pred /= 4
+                loss = criterion(pred.squeeze(), mask.squeeze(), 0.5, 1, 1e-5)
+                sum_loss += loss
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -87,14 +87,14 @@ if __name__ == "__main__":
                 end_step = time.time()
                 print("\rEpoch [{}/{}] - {}/{} - {}s - Loss: {:.4f}".format(epoch+idx_epoch+1, num_epoch, idx+1, len(ds_train), end_step - begin_epoch, loss), end='')
             end_epoch = time.time()
-            print("\rEpoch [{}/{}] - {}/{} - {}s/epoch - AverageLoss: {} - ".format(epoch+idx_epoch+1, num_epoch, len(ds_train), len(ds_train), end_epoch - begin_epoch, sum_loss_list/len(dl_train)), end='')
+            print("\rEpoch [{}/{}] - {}/{} - {}s/epoch - AverageLoss: {} - ".format(epoch+idx_epoch+1, num_epoch, len(ds_train), len(ds_train), end_epoch - begin_epoch, sum_loss/len(dl_train)), end='')
 
             model.eval()
             val_loss_list = np.array([0, 0, 0, 0], dtype=np.float32)
             for idx, (data, mask) in enumerate(dl_valid):
                 with torch.no_grad():
-                    data = data.to(device)
-                    mask = mask.to(device)
+                    data = data.reshape(data.size()[0], 1, crop_size, crop_size).to(device).float()
+                    mask = mask.to(device).float()
 
                     output = model(data)
                     for i in range(4):
@@ -102,7 +102,8 @@ if __name__ == "__main__":
                         pred = np.where(pred > 0.5, 1, 0)
                         mask_gt = np.where(mask.detach().to('cpu').numpy() > 0, 1, 0)
                         val_loss_list[i] += jaccard_score(mask_gt.flatten(), pred.flatten())
-            print("ValidLoss: {}".format(val_loss_list/len(dl_valid)))
+            end_epoch = time.time()
+            print("Valid: {} - {} s/epoch".format(val_loss_list/len(dl_valid), end_epoch - begin_epoch))
 
             torch.save(model.state_dict(), './ckp/model_parameters/unet_param_epoch_{}.pkl'.format(epoch+idx_epoch+1))
             torch.save(optimizer, './ckp/optimizer/optimizer_epoch_{}.pkl'.format(epoch+idx_epoch+1))
