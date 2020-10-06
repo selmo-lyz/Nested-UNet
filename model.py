@@ -28,7 +28,7 @@ class UpSample2D_block(nn.Module):
     
     def forward(self, x, skip=None):
         x = self.up(x)
-        if skip:
+        if skip is not None:
             x = torch.cat([x] + skip, 1)
         x = self.convReLU1(x)
         x = self.convReLU2(x)
@@ -85,25 +85,25 @@ class NestedUNet(nn.Module):
         '''
         Architecture: U-Net++
         '''
-        self.conv0_1 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
-        self.conv1_1 = UpSample2D_block(decoder_filters[1], decoder_filters[1], (3,3), 2, True)
-        self.conv2_1 = UpSample2D_block(decoder_filters[2], decoder_filters[2], (3,3), 2, True)
-        self.conv3_1 = UpSample2D_block(decoder_filters[3], decoder_filters[3], (3,3), 2, True)
+        self.conv0_1 = UpSample2D_block(decoder_filters[0]+decoder_filters[1], decoder_filters[0], (3,3), 2, True)
+        self.conv1_1 = UpSample2D_block(decoder_filters[1]+decoder_filters[2], decoder_filters[1], (3,3), 2, True)
+        self.conv2_1 = UpSample2D_block(decoder_filters[2]+decoder_filters[3], decoder_filters[2], (3,3), 2, True)
+        self.conv3_1 = UpSample2D_block(decoder_filters[3]+decoder_filters[4], decoder_filters[3], (3,3), 2, True)
 
-        self.conv0_2 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
-        self.conv1_2 = UpSample2D_block(decoder_filters[1], decoder_filters[1], (3,3), 2, True)
-        self.conv2_2 = UpSample2D_block(decoder_filters[2], decoder_filters[2], (3,3), 2, True)
+        self.conv0_2 = UpSample2D_block(2*decoder_filters[0]+decoder_filters[1], decoder_filters[0], (3,3), 2, True)
+        self.conv1_2 = UpSample2D_block(2*decoder_filters[1]+decoder_filters[2], decoder_filters[1], (3,3), 2, True)
+        self.conv2_2 = UpSample2D_block(2*decoder_filters[2]+decoder_filters[3], decoder_filters[2], (3,3), 2, True)
 
-        self.conv0_3 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
-        self.conv1_3 = UpSample2D_block(decoder_filters[1], decoder_filters[1], (3,3), 2, True)
+        self.conv0_3 = UpSample2D_block(3*decoder_filters[0]+decoder_filters[1], decoder_filters[0], (3,3), 2, True)
+        self.conv1_3 = UpSample2D_block(3*decoder_filters[1]+decoder_filters[2], decoder_filters[1], (3,3), 2, True)
 
-        self.conv0_4 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
+        self.conv0_4 = UpSample2D_block(4*decoder_filters[0]+decoder_filters[1], decoder_filters[0], (3,3), 2, True)
 
-        self.final1 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
-        self.final2 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
-        self.final3 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
-        self.final4 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
-        self.sigmoid = torch.Sigmoid()
+        self.final1 = nn.Conv2d(decoder_filters[0], 1, 1, padding=0)
+        self.final2 = nn.Conv2d(decoder_filters[0], 1, 1, padding=0)
+        self.final3 = nn.Conv2d(decoder_filters[0], 1, 1, padding=0)
+        self.final4 = nn.Conv2d(decoder_filters[0], 1, 1, padding=0)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, input):
         '''
@@ -118,10 +118,10 @@ class NestedUNet(nn.Module):
         '''
         U-Net++
         '''
-        x0_1 = self.conv0_1(x1_0, x0_0)
-        x1_1 = self.conv1_1(x2_0, x1_0)
-        x2_1 = self.conv2_1(x3_0, x2_0)
-        x3_1 = self.conv3_1(x4_0, x3_0)
+        x0_1 = self.conv0_1(x1_0, [x0_0])
+        x1_1 = self.conv1_1(x2_0, [x1_0])
+        x2_1 = self.conv2_1(x3_0, [x2_0])
+        x3_1 = self.conv3_1(x4_0, [x3_0])
 
         x0_2 = self.conv0_2(x1_1, [x0_0, x0_1])
         x1_2 = self.conv1_2(x2_1, [x1_0, x1_1])

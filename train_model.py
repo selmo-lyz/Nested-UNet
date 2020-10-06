@@ -76,7 +76,7 @@ if __name__ == "__main__":
                 output = model(data)
                 pred = 0
                 for i in range(4):
-                    pred += sigmoid(output[i])
+                    pred += output[i]
                 pred /= 4
                 loss = criterion(pred.squeeze(), mask.squeeze(), 0.5, 1, 1e-5)
                 sum_loss += loss
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
                     output = model(data)
                     for i in range(4):
-                        pred = sigmoid(output[i]).detach().to('cpu').numpy().squeeze()
+                        pred = output[i].detach().to('cpu').numpy().squeeze()
                         pred = np.where(pred > 0.5, 1, 0)
                         mask_gt = np.where(mask.detach().to('cpu').numpy() > 0, 1, 0)
                         val_loss_list[i] += jaccard_score(mask_gt.flatten(), pred.flatten())

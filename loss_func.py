@@ -22,14 +22,14 @@ class BCEDiceLoss(nn.Module):
         https://github.com/MrGiovanni/UNetPlusPlus/blob/dbe3806d7e859f1691c5f7816e756923fd0786b7/helper_functions.py#L47/blob/dbe3806d7e859f1691c5f7816e756923fd0786b7/helper_functions.py#L47
         '''
         # binary cross entropy
-        bce = F.binary_cross_entropy(input, target))
+        bce = F.binary_cross_entropy(input, target)
 
         # flatten
         input = input.view(-1)
         target = target.view(-1)
         # dice coefficent
         intersection = (input * target)
-        dice = (2 * intersection.sum() + smooth) / (input.sum() + target.sum() + smooth)/ (input.sum(1) + target.sum(1) + smooth)
+        dice = (2 * intersection.sum() + smooth) / (input.sum() + target.sum() + smooth)
 
         return alpha * bce - beta * dice
 
