@@ -1,80 +1,140 @@
 import torch
 import torch.nn as nn
 
-class VGGBlock(nn.Module):
-    def __init__(self, in_channels, middle_channels, out_channels, act_func=nn.ReLU(inplace=False)):
-        super(VGGBlock, self).__init__()
-        self.act_func = act_func
-        self.conv1 = nn.Conv2d(in_channels, middle_channels, 3, padding=1)
-        self.bn1 = nn.BatchNorm2d(middle_channels)
-        self.conv2 = nn.Conv2d(middle_channels, out_channels, 3, padding=1)
-        self.bn2 = nn.BatchNorm2d(out_channels)
+class ConvReLU(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, use_batchnorm=True):
+        super(ConvReLU, self).__init__()
+        self.use_batchnorm = use_batchnorm
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, padding=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.bn = None
 
+        if self.use_batchnorm:
+            self.bn = nn.BatchNorm2d(out_channels)
+    
     def forward(self, x):
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.act_func(out)
+        x = self.conv(x)
+        if self.use_batchnorm:
+            x = self.bn(x)
+        x = self.relu(x)
+        return x
 
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.act_func(out)
-        return out
+class UpSample2D_block(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=(3,3), upsample_rate=2, use_batchnorm=True):
+        super(UpSample2D_block, self).__init__()
+        self.up = nn.Upsample(scale_factor=upsample_rate)
+        self.convReLU1 = ConvReLU(in_channels, out_channels, kernel_size, use_batchnorm)
+        self.convReLU2 = ConvReLU(out_channels, out_channels, kernel_size, use_batchnorm)
+    
+    def forward(self, x, skip=None):
+        x = self.up(x)
+        if skip:
+            x = torch.cat([x] + skip, 1)
+        x = self.convReLU1(x)
+        x = self.convReLU2(x)
+        return x
 
 class NestedUNet(nn.Module):
     def __init__(self):
         super().__init__()
-        nb_filter = [32, 64, 128, 256, 512]
+        decoder_filters = [32, 64, 128, 256, 512]
 
-        self.pool = nn.MaxPool2d(2, 2)
-        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.pool = nn.MaxPool2d(2)
+        self.up = nn.Upsample(scale_factor=2)
 
-        self.conv0_0 = VGGBlock(1, nb_filter[0], nb_filter[0])
-        self.conv1_0 = VGGBlock(nb_filter[0], nb_filter[1], nb_filter[1])
-        self.conv2_0 = VGGBlock(nb_filter[1], nb_filter[2], nb_filter[2])
-        self.conv3_0 = VGGBlock(nb_filter[2], nb_filter[3], nb_filter[3])
-        self.conv4_0 = VGGBlock(nb_filter[3], nb_filter[4], nb_filter[4])
+        '''
+        Backbone: VGG16
+        '''
+        class VGG16_block1(nn.Module):
+            def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, scale_factor=2):
+                super().__init__()
+                self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding)
+                self.relu1 = nn.ReLU(inplace=True)
+                self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, padding=padding)
+                self.relu2 = nn.ReLU(inplace=True)
+                self.pool = nn.MaxPool2d(scale_factor)
+            
+            def forward(self, x):
+                x = self.relu1(self.conv1(x))
+                x = self.relu2(self.conv2(x))
+                return x, self.pool(x)
 
-        self.conv0_1 = VGGBlock(nb_filter[0]+nb_filter[1], nb_filter[0], nb_filter[0])
-        self.conv1_1 = VGGBlock(nb_filter[1]+nb_filter[2], nb_filter[1], nb_filter[1])
-        self.conv2_1 = VGGBlock(nb_filter[2]+nb_filter[3], nb_filter[2], nb_filter[2])
-        self.conv3_1 = VGGBlock(nb_filter[3]+nb_filter[4], nb_filter[3], nb_filter[3])
+        class VGG16_block2(nn.Module):
+            def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, scale_factor=2):
+                super().__init__()
+                self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding)
+                self.relu1 = nn.ReLU(inplace=True)
+                self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, padding=padding)
+                self.relu2 = nn.ReLU(inplace=True)
+                self.conv3 = nn.Conv2d(out_channels, out_channels, kernel_size, padding=padding)
+                self.relu3 = nn.ReLU(inplace=True)
+                self.pool = nn.MaxPool2d(scale_factor)
+            
+            def forward(self, x):
+                x = self.relu1(self.conv1(x))
+                x = self.relu2(self.conv2(x))
+                x = self.relu3(self.conv3(x))
+                return x, self.pool(x)
 
-        self.conv0_2 = VGGBlock(nb_filter[0]*2+nb_filter[1], nb_filter[0], nb_filter[0])
-        self.conv1_2 = VGGBlock(nb_filter[1]*2+nb_filter[2], nb_filter[1], nb_filter[1])
-        self.conv2_2 = VGGBlock(nb_filter[2]*2+nb_filter[3], nb_filter[2], nb_filter[2])
+        self.vgg16_block1 = VGG16_block1(1, decoder_filters[0])
+        self.vgg16_block2 = VGG16_block1(decoder_filters[0], decoder_filters[1])
+        self.vgg16_block3 = VGG16_block2(decoder_filters[1], decoder_filters[2])
+        self.vgg16_block4 = VGG16_block2(decoder_filters[2], decoder_filters[3])
+        self.vgg16_block5 = VGG16_block2(decoder_filters[3], decoder_filters[4])
 
-        self.conv0_3 = VGGBlock(nb_filter[0]*3+nb_filter[1], nb_filter[0], nb_filter[0])
-        self.conv1_3 = VGGBlock(nb_filter[1]*3+nb_filter[2], nb_filter[1], nb_filter[1])
+        '''
+        Architecture: U-Net++
+        '''
+        self.conv0_1 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
+        self.conv1_1 = UpSample2D_block(decoder_filters[1], decoder_filters[1], (3,3), 2, True)
+        self.conv2_1 = UpSample2D_block(decoder_filters[2], decoder_filters[2], (3,3), 2, True)
+        self.conv3_1 = UpSample2D_block(decoder_filters[3], decoder_filters[3], (3,3), 2, True)
 
-        self.conv0_4 = VGGBlock(nb_filter[0]*4+nb_filter[1], nb_filter[0], nb_filter[0])
+        self.conv0_2 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
+        self.conv1_2 = UpSample2D_block(decoder_filters[1], decoder_filters[1], (3,3), 2, True)
+        self.conv2_2 = UpSample2D_block(decoder_filters[2], decoder_filters[2], (3,3), 2, True)
 
-        self.final1 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
-        self.final2 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
-        self.final3 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
-        self.final4 = nn.Conv2d(nb_filter[0], 1, kernel_size=1)
+        self.conv0_3 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
+        self.conv1_3 = UpSample2D_block(decoder_filters[1], decoder_filters[1], (3,3), 2, True)
+
+        self.conv0_4 = UpSample2D_block(decoder_filters[0], decoder_filters[0], (3,3), 2, True)
+
+        self.final1 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
+        self.final2 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
+        self.final3 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
+        self.final4 = nn.Conv2d(decoder_filters[1], 1, 1, padding=0)
+        self.sigmoid = torch.Sigmoid()
 
     def forward(self, input):
-        x0_0 = self.conv0_0(input)
-        x1_0 = self.conv1_0(self.pool(x0_0))
-        x0_1 = self.conv0_1(torch.cat([x0_0, self.up(x1_0)], 1))
+        '''
+        Backbone
+        '''
+        x0_0, x0_0p = self.vgg16_block1(input)
+        x1_0, x1_0p = self.vgg16_block2(x0_0p)
+        x2_0, x2_0p = self.vgg16_block3(x1_0p)
+        x3_0, x3_0p = self.vgg16_block4(x2_0p)
+        x4_0, x4_0p = self.vgg16_block5(x3_0p)
 
-        x2_0 = self.conv2_0(self.pool(x1_0))
-        x1_1 = self.conv1_1(torch.cat([x1_0, self.up(x2_0)], 1))
-        x0_2 = self.conv0_2(torch.cat([x0_0, x0_1, self.up(x1_1)], 1))
+        '''
+        U-Net++
+        '''
+        x0_1 = self.conv0_1(x1_0, x0_0)
+        x1_1 = self.conv1_1(x2_0, x1_0)
+        x2_1 = self.conv2_1(x3_0, x2_0)
+        x3_1 = self.conv3_1(x4_0, x3_0)
 
-        x3_0 = self.conv3_0(self.pool(x2_0))
-        x2_1 = self.conv2_1(torch.cat([x2_0, self.up(x3_0)], 1))
-        x1_2 = self.conv1_2(torch.cat([x1_0, x1_1, self.up(x2_1)], 1))
-        x0_3 = self.conv0_3(torch.cat([x0_0, x0_1, x0_2, self.up(x1_2)], 1))
+        x0_2 = self.conv0_2(x1_1, [x0_0, x0_1])
+        x1_2 = self.conv1_2(x2_1, [x1_0, x1_1])
+        x2_2 = self.conv2_2(x3_1, [x2_0, x2_1])
 
-        x4_0 = self.conv4_0(self.pool(x3_0))
-        x3_1 = self.conv3_1(torch.cat([x3_0, self.up(x4_0)], 1))
-        x2_2 = self.conv2_2(torch.cat([x2_0, x2_1, self.up(x3_1)], 1))
-        x1_3 = self.conv1_3(torch.cat([x1_0, x1_1, x1_2, self.up(x2_2)], 1))
-        x0_4 = self.conv0_4(torch.cat([x0_0, x0_1, x0_2, x0_3, self.up(x1_3)], 1))
+        x0_3 = self.conv0_3(x1_2, [x0_0, x0_1, x0_2])
+        x1_3 = self.conv1_3(x2_2, [x1_0, x1_1, x1_2])
 
-        output1 = self.final1(x0_1)
-        output2 = self.final2(x0_2)
-        output3 = self.final3(x0_3)
-        output4 = self.final4(x0_4)
+        x0_4 = self.conv0_4(x1_3, [x0_0, x0_1, x0_2, x0_3])
+
+        output1 = self.sigmoid(self.final1(x0_1))
+        output2 = self.sigmoid(self.final2(x0_2))
+        output3 = self.sigmoid(self.final3(x0_3))
+        output4 = self.sigmoid(self.final4(x0_4))
+
         return [output1, output2, output3, output4]
