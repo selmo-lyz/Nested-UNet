@@ -51,7 +51,6 @@ class LoggingCallback(Callback):
         log_entry = {
             "epoch": epoch,
             "train_loss": logs.get("train_loss", None),
-            "val_loss": logs.get("val_loss", None),
             "val_metrics": logs.get("val_metrics", None),
             "epoch_time": time.time() - self.start_time,
             "logging_time": datetime.now().astimezone().isoformat(),
@@ -64,7 +63,6 @@ class LoggingCallback(Callback):
         print(
             f"[INFO] Epoch {log_entry['epoch']}: "
             + f"Train loss = {log_entry['train_loss']:.4f}, "
-            + f"Val loss = {log_entry['val_loss']:.4f}, "
             + f"Val metrics = {log_entry['val_metrics']}, "
             + f"Epoch time = {log_entry['epoch_time']:.2f}, "
             + f"Logging time = {log_entry['logging_time']}"
@@ -72,15 +70,27 @@ class LoggingCallback(Callback):
 
 
 class EarlyStoppingCallback(Callback):
-    def __init__(self, patience=5, last_wait=0):
+    def __init__(
+        self,
+        metric_fname,
+        patience=5,
+        best_val_loss=float("inf"),
+        best_epoch=None,
+        last_wait=0,
+    ):
+        self.metric_fname = metric_fname
         self.patience = patience
-        self.best_val_loss = float("inf")
+        self.best_val_loss = best_val_loss
         self.wait = last_wait
-        self.best_epoch = None
+        self.best_epoch = best_epoch
         self.stopped_epoch = None
 
     def on_epoch_end(self, trainer, epoch, logs):
-        val_loss = logs.get("val_loss", None)
+        val_loss = logs.get("val_metrics", None).get(self.metric_fname, None)
+
+        if val_loss is None:
+            print("[ERROR] Can not get validation loss")
+            return
 
         if val_loss < self.best_val_loss:
             self.best_val_loss = val_loss
