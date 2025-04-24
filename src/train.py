@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -17,15 +18,26 @@ def get_dataloader(
     src_dir,
     patient_ids,
     batch_size,
+    transform=None,
     cache_slice_info_path=None,
 ):
     dataset = LiTSSliceDataset(
         src_dir=src_dir,
         patient_ids=patient_ids,
+        transform=transform,
         cache_slice_info_path=cache_slice_info_path,
     )
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     return dataloader
+
+
+def transform(sample, smooth=1e-8):
+    sample = dict(sample)
+    sample["image"] = np.clip(sample["image"], -1000, 500)
+    sample["image"] = (sample["image"] - np.mean(sample["image"])) / (
+        np.std(sample["image"]) + smooth
+    )
+    return sample
 
 
 if __name__ == "__main__":
@@ -34,10 +46,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     src_dir = Path("datasets/MICCAI 2017 LiTS/npz_compressed")
-    result_dir = Path("results/checkpoints/Test-Local-03")
+    result_dir = Path("results/checkpoints/Test-Local-4")
     result_dir.mkdir(parents=True, exist_ok=True)
     log_path = result_dir / "log.jsonl"
-    checkpoint_path = None  # result_dir / "checkpoint-0015.pth"
+    checkpoint_path = None  # result_dir / "checkpoint-0002.pth"
     train_patient_ids = [i for i in range(0, 101, 1)]
     val_patient_ids = [i for i in range(101, 116, 1)]
     train_slice_info_path = result_dir / "train_slice_info.pkl"
@@ -55,7 +67,13 @@ if __name__ == "__main__":
     callbacks = [
         SaveCheckpointCallback(save_path=result_dir),
         LoggingCallback(log_path=log_path, total_epochs=num_epochs),
-        EarlyStoppingCallback(patience=10, last_wait=0),
+        EarlyStoppingCallback(
+            metric_fname=loss_fn.__class__.__name__,
+            patience=10,
+            # best_epoch=1,
+            # best_val_loss=0.8135041133779559,
+            last_wait=0,
+        ),
     ]
     metric_fns = [
         sensitivity,
@@ -68,12 +86,14 @@ if __name__ == "__main__":
         src_dir=src_dir,
         patient_ids=train_patient_ids,
         batch_size=batch_size,
+        transform=transform,
         cache_slice_info_path=train_slice_info_path,
     )
     val_loader = get_dataloader(
         src_dir=src_dir,
         patient_ids=val_patient_ids,
         batch_size=batch_size,
+        transform=transform,
         cache_slice_info_path=val_slice_info_path,
     )
     if not train_slice_info_path.exists():
