@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from tqdm import tqdm
 
@@ -27,6 +28,13 @@ class NestedUNetTrainer:
         self.optimizer.load_state_dict(checkpoint["optimizer_state"])
         self.last_epoch = checkpoint["epoch"]
 
+    def _get_metric_name(self, metric):
+        if hasattr(metric, "__name__"):
+            return metric.__name__
+        elif hasattr(metric, "__class__"):
+            return metric.__class__.__name__
+        return str(metric)
+
     def _calc_metrics(
         self,
         dataloader,
@@ -40,12 +48,12 @@ class NestedUNetTrainer:
         running_metrics = [0 for i in range(len(metric_fns))]
         total_samples = 0
 
-        with torch.no_grad():
-            for batch in tqdm(dataloader, ncols=80):
-                inputs = batch["image"].to(self.device)
-                labels = batch["mask"].to(self.device)
-                batch_size = inputs.size(0)
+        for batch in tqdm(dataloader, ncols=80):
+            inputs = batch["image"].to(self.device)
+            labels = batch["mask"].to(self.device)
+            batch_size = inputs.size(0)
 
+            with torch.no_grad():
                 outputs = self.model(inputs)
                 outputs = torch.stack(outputs, dim=0)
                 preds = torch.mean(outputs, dim=0)
@@ -55,9 +63,10 @@ class NestedUNetTrainer:
                     running_metrics[idx] += metric * batch_size
                 total_samples += batch_size
 
-        avg_metrics = [
-            running_metric / total_samples for running_metric in running_metrics
-        ]
+        avg_metrics = {
+            self._get_metric_name(metric_fn): float(running_metric) / total_samples
+            for (metric_fn, running_metric) in zip(metric_fns, running_metrics)
+        }
         return avg_metrics
 
     def _run_epochs(self, dataloader, is_train=True):
@@ -92,8 +101,11 @@ class NestedUNetTrainer:
         val_dataloader,
         num_epochs,
         callbacks,
-        metric_fns=None,
+        metric_fns=[],
     ):
+        if isinstance(metric_fns, list):
+            metric_fns.append(self.loss_fn)
+
         for cb in callbacks:
             cb.on_train_begin(self)
 
@@ -102,14 +114,10 @@ class NestedUNetTrainer:
                 cb.on_epoch_begin(self, epoch)
 
             train_loss = self._run_epochs(train_dataloader, is_train=True)
-            val_loss = self._run_epochs(val_dataloader, is_train=False)
-            val_metrics = []
-            if metric_fns is not None:
-                val_metrics = self._calc_metrics(val_dataloader, metric_fns)
+            val_metrics = self._calc_metrics(val_dataloader, metric_fns)
 
             logs = {
                 "train_loss": train_loss,
-                "val_loss": val_loss,
                 "val_metrics": val_metrics,
             }
 
