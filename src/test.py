@@ -56,7 +56,7 @@ if __name__ == "__main__":
         cache_slice_info_path=test_slice_info_path,
     )
     if not test_slice_info_path.exists():
-        test_loader.dataset.save_slice_info(result_dir / "test_slice_info.pkl")
+        test_loader.dataset.save_slice_info(test_slice_info_path)
 
     runner = NestedUNetInferenceRunner(
         model=model,

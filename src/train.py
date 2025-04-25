@@ -46,7 +46,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     src_dir = Path("datasets/MICCAI 2017 LiTS/npz_compressed")
-    result_dir = Path("results/checkpoints/Test-Local-4")
+    result_dir = Path("results/checkpoints/Test-Local-04")
     result_dir.mkdir(parents=True, exist_ok=True)
     log_path = result_dir / "log.jsonl"
     checkpoint_path = None  # result_dir / "checkpoint-0002.pth"
@@ -59,8 +59,7 @@ if __name__ == "__main__":
     batch_size = 2
     num_epochs = 100
 
-    model = NestedUNet()
-    model.to(device)
+    model = NestedUNet().to(device)
     # model = nn.DataParallel(model, device_ids=[0, 1])
     loss_fn = BCEDiceLoss(alpha=0.5, beta=1.0)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.99))
@@ -97,9 +96,9 @@ if __name__ == "__main__":
         cache_slice_info_path=val_slice_info_path,
     )
     if not train_slice_info_path.exists():
-        train_loader.dataset.save_slice_info(result_dir / "train_slice_info.pkl")
+        train_loader.dataset.save_slice_info(train_slice_info_path)
     if not val_slice_info_path.exists():
-        val_loader.dataset.save_slice_info(result_dir / "val_slice_info.pkl")
+        val_loader.dataset.save_slice_info(val_slice_info_path)
 
     trainer = NestedUNetTrainer(
         model=model,
