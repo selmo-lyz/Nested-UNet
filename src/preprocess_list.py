@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from dataset.dataset_lits import ParallelLiTSDataPreprocessor
+from dataset.list import ParallelLiTSDataPreprocessor
 
 if __name__ == "__main__":
     src_dir = Path(

@@ -1,44 +1,15 @@
 import os
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
 
 from callbacks import EarlyStoppingCallback, LoggingCallback, SaveCheckpointCallback
-from dataset.dataset_lits import LiTSSliceDataset
+from dataset.list import get_dataloader, transform
 from loss_func import BCEDiceLoss, DiceLoss
 from metrics import f1_score, f2_score, get_metric_name, sensitivity, specificity
 from model import NestedUNet
 from trainer import NestedUNetTrainer
-
-
-def get_dataloader(
-    src_dir,
-    patient_ids,
-    batch_size,
-    transform=None,
-    cache_slice_info_path=None,
-):
-    dataset = LiTSSliceDataset(
-        src_dir=src_dir,
-        patient_ids=patient_ids,
-        transform=transform,
-        cache_slice_info_path=cache_slice_info_path,
-    )
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    return dataloader
-
-
-def transform(sample, smooth=1e-8):
-    sample = dict(sample)
-    sample["image"] = np.clip(sample["image"], -1000, 500)
-    sample["image"] = (sample["image"] - np.mean(sample["image"])) / (
-        np.std(sample["image"]) + smooth
-    )
-    return sample
-
 
 if __name__ == "__main__":
     # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"

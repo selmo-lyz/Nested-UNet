@@ -9,6 +9,32 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 
+def transform(sample, smooth=1e-8):
+    sample = dict(sample)
+    sample["image"] = np.clip(sample["image"], -1000, 500)
+    sample["image"] = (sample["image"] - np.mean(sample["image"])) / (
+        np.std(sample["image"]) + smooth
+    )
+    return sample
+
+
+def get_dataloader(
+    src_dir,
+    patient_ids,
+    batch_size,
+    transform=None,
+    cache_slice_info_path=None,
+):
+    dataset = LiTSSliceDataset(
+        src_dir=src_dir,
+        patient_ids=patient_ids,
+        transform=transform,
+        cache_slice_info_path=cache_slice_info_path,
+    )
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    return dataloader
+
+
 class LiTSDataPreprocessor:
     def __init__(self):
         pass

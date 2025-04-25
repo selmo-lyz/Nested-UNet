@@ -3,10 +3,10 @@ from pathlib import Path
 import torch
 
 from callbacks import EarlyStoppingCallback, LoggingCallback, SaveCheckpointCallback
+from dataset.list import get_dataloader, transform
 from loss_func import BCEDiceLoss
 from metrics import f1_score, f2_score, sensitivity, specificity
 from model import NestedUNet
-from train import get_dataloader, transform
 from trainer import NestedUNetTrainer
 
 
