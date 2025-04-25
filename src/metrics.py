@@ -1,6 +1,16 @@
 import torch
 
 
+def get_metric_name(metric_fn):
+    if hasattr(metric_fn, "__name__"):
+        # For functions, e.g. f1_score().
+        return metric_fn.__name__
+    elif hasattr(metric_fn, "__class__"):
+        # For instances of class, e.g. nn.BCELoss().
+        return metric_fn.__class__.__name__
+    return str(metric_fn)
+
+
 def _binarize(preds, threshold=0.5):
     return (preds > threshold).float()
 

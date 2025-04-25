@@ -2,6 +2,8 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+from metrics import get_metric_name
+
 
 class NestedUNetTrainer:
     def __init__(
@@ -27,13 +29,6 @@ class NestedUNetTrainer:
         self.model.load_state_dict(checkpoint["model_state"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state"])
         self.last_epoch = checkpoint["epoch"]
-
-    def _get_metric_name(self, metric):
-        if hasattr(metric, "__name__"):
-            return metric.__name__
-        elif hasattr(metric, "__class__"):
-            return metric.__class__.__name__
-        return str(metric)
 
     def _run_epochs(self, dataloader, is_train=True, metric_fns=[]):
         self.model.train() if is_train else self.model.eval()
@@ -66,7 +61,7 @@ class NestedUNetTrainer:
 
         avg_loss = running_loss / total_samples
         avg_metrics = {
-            self._get_metric_name(metric_fn): float(running_metric) / total_samples
+            get_metric_name(metric_fn): float(running_metric) / total_samples
             for (metric_fn, running_metric) in zip(metric_fns, running_metrics)
         }
         return avg_loss if len(metric_fns) == 0 else avg_metrics
