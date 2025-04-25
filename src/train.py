@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from callbacks import EarlyStoppingCallback, LoggingCallback, SaveCheckpointCallback
 from dataset.dataset_lits import LiTSSliceDataset
 from loss_func import BCEDiceLoss, DiceLoss
-from metrics import f1_score, f2_score, sensitivity, specificity
+from metrics import f1_score, f2_score, get_metric_name, sensitivity, specificity
 from model import NestedUNet
 from trainer import NestedUNetTrainer
 
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         SaveCheckpointCallback(save_path=result_dir),
         LoggingCallback(log_path=log_path, total_epochs=num_epochs),
         EarlyStoppingCallback(
-            metric_fname=loss_fn.__class__.__name__,
+            metric_fname=get_metric_name(loss_fn),
             patience=10,
             # best_epoch=1,
             # best_val_loss=0.8135041133779559,
