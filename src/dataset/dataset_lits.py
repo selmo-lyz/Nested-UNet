@@ -150,18 +150,35 @@ class LiTSSliceDataset(Dataset):
         self.slice_axis = slice_axis
         self.slice_info = []
 
-        if cache_slice_info_path is None or not cache_slice_info_path.exists():
-            self._generate_slice_info()
+        if cache_slice_info_path is not None and Path(cache_slice_info_path).exists():
+            self._load_slice_info(Path(cache_slice_info_path))
         else:
-            self._load_slice_info(cache_slice_info_path)
+            self._generate_slice_info()
 
     def save_slice_info(self, dest_path):
         with open(dest_path, "wb") as f:
-            pickle.dump(self.slice_info, f)
+            pickle.dump(
+                {
+                    "patient_ids": self.patient_ids,
+                    "slice_info": self.slice_info,
+                },
+                f,
+            )
 
     def _load_slice_info(self, src_path):
+        cache_info = None
         with open(src_path, "rb") as f:
-            self.slice_info = pickle.load(f)
+            cache_info = pickle.load(f)
+
+        if cache_info["patient_ids"] != self.patient_ids:
+            print(
+                "[INFO] Patient IDs mismatch."
+                + "Cache will be rebuilt with current patient_ids."
+            )
+            self._generate_slice_info()
+            return
+
+        self.slice_info = cache_info["slice_info"]
 
     def _generate_slice_info(self):
         for patient_id in self.patient_ids:
