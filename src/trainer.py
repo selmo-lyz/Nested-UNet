@@ -12,7 +12,6 @@ class NestedUNetTrainer:
         optimizer,
         loss_fn,
         device,
-        callbacks=[],
     ):
         self.model = model.to(device)
         self.optimizer = optimizer
