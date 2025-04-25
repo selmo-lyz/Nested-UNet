@@ -1,12 +1,8 @@
-import tempfile
 from pathlib import Path
 
-import numpy as np
 import torch
-from torch.utils.data import DataLoader
 
 from callbacks import EarlyStoppingCallback, LoggingCallback, SaveCheckpointCallback
-from dataset.dataset_lits import LiTSSliceDataset
 from loss_func import BCEDiceLoss
 from metrics import f1_score, f2_score, sensitivity, specificity
 from model import NestedUNet
@@ -23,7 +19,7 @@ def test_training_pipeline_runs():
     log_path = result_dir / "log.jsonl"
 
     learning_rate = 3e-4
-    batch_size = 2
+    batch_size = 1
 
     model = NestedUNet().to(device)
     loss_fn = BCEDiceLoss()
