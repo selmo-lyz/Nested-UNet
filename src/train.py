@@ -15,7 +15,7 @@ from trainer import NestedUNetTrainer
 
 
 def data_filter(paths):
-    retain_empty_ratio = 0.1
+    retain_empty_ratio = 0.25
 
     non_empty_mask_paths = []
     empty_mask_paths = []
@@ -39,13 +39,121 @@ def data_filter(paths):
     return filtered_paths
 
 
+def generate_layer_configs():
+    encoder_channels = [32, 64, 128, 256, 512]
+    layer_configs = {
+        "EncoderNode": {
+            "node0_0": {
+                "in_channels": 1,
+                "out_channels": encoder_channels[0],
+                "sampling_method": "conv",
+            },
+            "node1_0": {
+                "in_channels": encoder_channels[0],
+                "out_channels": encoder_channels[1],
+                "sampling_method": "conv",
+            },
+            "node2_0": {
+                "in_channels": encoder_channels[1],
+                "out_channels": encoder_channels[2],
+                "sampling_method": "conv",
+            },
+            "node3_0": {
+                "in_channels": encoder_channels[2],
+                "out_channels": encoder_channels[3],
+                "sampling_method": "conv",
+            },
+            "node4_0": {
+                "in_channels": encoder_channels[3],
+                "out_channels": encoder_channels[4],
+                "sampling_method": "none",
+            },
+        },
+        "DecoderNode": {
+            # NestedUNet: Level 1 Decoder
+            "node0_1": {
+                "in_channels": encoder_channels[0] + encoder_channels[1],
+                "upsampling_in_channels": encoder_channels[1],
+                "out_channels": encoder_channels[0],
+                "sampling_method": "conv",
+            },
+            # NestedUNet: Level 2 Decoder
+            "node1_1": {
+                "in_channels": encoder_channels[1] + encoder_channels[2],
+                "upsampling_in_channels": encoder_channels[2],
+                "out_channels": encoder_channels[1],
+                "sampling_method": "conv",
+            },
+            "node0_2": {
+                "in_channels": encoder_channels[0] * 2 + encoder_channels[1],
+                "upsampling_in_channels": encoder_channels[1],
+                "out_channels": encoder_channels[0],
+                "sampling_method": "conv",
+            },
+            # NestedUNet: Level 3 Decoder
+            "node2_1": {
+                "in_channels": encoder_channels[2] + encoder_channels[3],
+                "upsampling_in_channels": encoder_channels[3],
+                "out_channels": encoder_channels[2],
+                "sampling_method": "conv",
+            },
+            "node1_2": {
+                "in_channels": encoder_channels[1] * 2 + encoder_channels[2],
+                "upsampling_in_channels": encoder_channels[2],
+                "out_channels": encoder_channels[1],
+                "sampling_method": "conv",
+            },
+            "node0_3": {
+                "in_channels": encoder_channels[0] * 3 + encoder_channels[1],
+                "upsampling_in_channels": encoder_channels[1],
+                "out_channels": encoder_channels[0],
+                "sampling_method": "conv",
+            },
+            # NestedUNet: Level 4 Decoder
+            "node3_1": {
+                "in_channels": encoder_channels[3] + encoder_channels[4],
+                "upsampling_in_channels": encoder_channels[4],
+                "out_channels": encoder_channels[3],
+                "sampling_method": "conv",
+            },
+            "node2_2": {
+                "in_channels": encoder_channels[2] * 2 + encoder_channels[3],
+                "upsampling_in_channels": encoder_channels[3],
+                "out_channels": encoder_channels[2],
+                "sampling_method": "conv",
+            },
+            "node1_3": {
+                "in_channels": encoder_channels[1] * 3 + encoder_channels[2],
+                "upsampling_in_channels": encoder_channels[2],
+                "out_channels": encoder_channels[1],
+                "sampling_method": "conv",
+            },
+            "node0_4": {
+                "in_channels": encoder_channels[0] * 4 + encoder_channels[1],
+                "upsampling_in_channels": encoder_channels[1],
+                "out_channels": encoder_channels[0],
+                "sampling_method": "conv",
+            },
+        },
+        "DeepSupervisionModule": {
+            "deep_supervision": {
+                "in_channels": encoder_channels[0],
+                "out_channels": 1,
+                "num_level": 4,
+            },
+        },
+    }
+
+    return layer_configs
+
+
 if __name__ == "__main__":
     # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     src_dir = Path("datasets/MICCAI 2017 LiTS/npz_compressed")
-    result_dir = Path("results/checkpoints/Test-Local-06")
+    result_dir = Path("results/checkpoints/Test-Local-07")
     result_dir.mkdir(parents=True, exist_ok=True)
     log_path = result_dir / "log.jsonl"
     checkpoint_path = None  # result_dir / "checkpoint-0003.pth"
@@ -58,14 +166,15 @@ if __name__ == "__main__":
     batch_size = 2
     num_epochs = 30
 
-    model = NestedUNet().to(device)
-    loss_fn = BCEDiceLoss(alpha=0.2, beta=1)
+    model = NestedUNet(layer_configs=generate_layer_configs()).to(device)
+    loss_fn = BCEDiceLoss(alpha=0.5, beta=1)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     callbacks = [
         SaveCheckpointCallback(save_path=result_dir),
         LoggingCallback(log_path=log_path, total_epochs=num_epochs),
         EarlyStoppingCallback(
             metric_fname=get_metric_name(f1_score),
+            mode="max",
             patience=5,
             last_wait=0,
         ),
@@ -75,6 +184,7 @@ if __name__ == "__main__":
         specificity,
         f1_score,
         f2_score,
+        loss_fn,
     ]
 
     train_loader = get_dataloader(

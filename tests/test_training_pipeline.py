@@ -5,8 +5,9 @@ import torch
 from callbacks import EarlyStoppingCallback, LoggingCallback, SaveCheckpointCallback
 from dataset.list import get_dataloader, transform
 from loss_func import BCEDiceLoss
-from metrics import f1_score, f2_score, sensitivity, specificity
+from metrics import f1_score, f2_score, get_metric_name, sensitivity, specificity
 from model import NestedUNet
+from train import data_filter, generate_layer_configs
 from trainer import NestedUNetTrainer
 
 
@@ -21,23 +22,23 @@ def test_training_pipeline_runs():
     learning_rate = 3e-4
     batch_size = 1
 
-    model = NestedUNet().to(device)
-    loss_fn = BCEDiceLoss()
+    model = NestedUNet(layer_configs=generate_layer_configs()).to(device)
+    loss_fn = BCEDiceLoss(alpha=0.5, beta=1)
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=learning_rate,
-        betas=(0.9, 0.99),
     )
     callbacks = [
         SaveCheckpointCallback(save_path=result_dir),
         LoggingCallback(log_path=log_path, total_epochs=1),
-        EarlyStoppingCallback(metric_fname=loss_fn.__class__.__name__),
+        EarlyStoppingCallback(metric_fname=get_metric_name(f1_score), mode="max"),
     ]
     metric_fns = [
         sensitivity,
         specificity,
         f1_score,
         f2_score,
+        loss_fn,
     ]
 
     dataloader = get_dataloader(
@@ -45,6 +46,7 @@ def test_training_pipeline_runs():
         patient_ids=[0],
         batch_size=batch_size,
         transform=transform,
+        data_filter=data_filter,
     )
 
     trainer = NestedUNetTrainer(

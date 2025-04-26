@@ -120,132 +120,172 @@ class DeepSupervisionModule(nn.Module):
 
 
 class NestedUNet(nn.Module):
-    def __init__(self, encoder_channels=[32, 64, 128, 256, 512]):
+    def __init__(self, layer_configs=None):
         super().__init__()
-        """
-        NestedUNet: Encoder
-        """
-        self.node0_0 = EncoderNode(1, encoder_channels[0], sampling_method="pool")
-        self.node1_0 = EncoderNode(
-            encoder_channels[0], encoder_channels[1], sampling_method="pool"
-        )
-        self.node2_0 = EncoderNode(
-            encoder_channels[1], encoder_channels[2], sampling_method="pool"
-        )
-        self.node3_0 = EncoderNode(
-            encoder_channels[2], encoder_channels[3], sampling_method="pool"
-        )
-        self.node4_0 = EncoderNode(
-            encoder_channels[3], encoder_channels[4], sampling_method="none"
-        )
-        """
-        NestedUNet: Level 1 Decoder
-        """
-        self.node0_1 = DecoderNode(
-            encoder_channels[0] + encoder_channels[1],
-            encoder_channels[1],
-            encoder_channels[0],
-            sampling_method="upsample",
-        )
-        """
-        NestedUNet: Level 2 Decoder
-        """
-        self.node1_1 = DecoderNode(
-            encoder_channels[1] + encoder_channels[2],
-            encoder_channels[2],
-            encoder_channels[1],
-            sampling_method="upsample",
-        )
-        self.node0_2 = DecoderNode(
-            encoder_channels[0] * 2 + encoder_channels[1],
-            encoder_channels[1],
-            encoder_channels[0],
-            sampling_method="upsample",
-        )
-        """
-        NestedUNet: Level 3 Decoder
-        """
-        self.node2_1 = DecoderNode(
-            encoder_channels[2] + encoder_channels[3],
-            encoder_channels[3],
-            encoder_channels[2],
-            sampling_method="upsample",
-        )
-        self.node1_2 = DecoderNode(
-            encoder_channels[1] * 2 + encoder_channels[2],
-            encoder_channels[2],
-            encoder_channels[1],
-            sampling_method="upsample",
-        )
-        self.node0_3 = DecoderNode(
-            encoder_channels[0] * 3 + encoder_channels[1],
-            encoder_channels[1],
-            encoder_channels[0],
-            sampling_method="upsample",
-        )
-        """
-        NestedUNet: Level 4 Decoder
-        """
-        self.node3_1 = DecoderNode(
-            encoder_channels[3] + encoder_channels[4],
-            encoder_channels[4],
-            encoder_channels[3],
-            sampling_method="upsample",
-        )
-        self.node2_2 = DecoderNode(
-            encoder_channels[2] * 2 + encoder_channels[3],
-            encoder_channels[3],
-            encoder_channels[2],
-            sampling_method="upsample",
-        )
-        self.node1_3 = DecoderNode(
-            encoder_channels[1] * 3 + encoder_channels[2],
-            encoder_channels[2],
-            encoder_channels[1],
-            sampling_method="upsample",
-        )
-        self.node0_4 = DecoderNode(
-            encoder_channels[0] * 4 + encoder_channels[1],
-            encoder_channels[1],
-            encoder_channels[0],
-            sampling_method="upsample",
-        )
-        """
-        NestedUNet: Deep Supervision
-        """
-        self.deep_supervision = DeepSupervisionModule(encoder_channels[0], 1)
+
+        if layer_configs is None:
+            layer_configs = self._generate_default_layer_configs()
+
+        self.nodes = nn.ModuleDict()
+
+        for name, config in layer_configs["EncoderNode"].items():
+            self.nodes[name] = EncoderNode(
+                in_channels=config["in_channels"],
+                out_channels=config["out_channels"],
+                sampling_method=config["sampling_method"],
+            )
+
+        for name, config in layer_configs["DecoderNode"].items():
+            self.nodes[name] = DecoderNode(
+                in_channels=config["in_channels"],
+                upsampling_in_channels=config["upsampling_in_channels"],
+                out_channels=config["out_channels"],
+                sampling_method=config["sampling_method"],
+            )
+
+        deepsupervision_config = layer_configs.get("DeepSupervisionModule", None)
+        if deepsupervision_config is not None:
+            config = deepsupervision_config["deep_supervision"]
+            self.nodes["deep_supervision"] = DeepSupervisionModule(
+                in_channels=config["in_channels"],
+                out_channels=config["out_channels"],
+                num_levels=config["num_level"],
+            )
 
     def forward(self, input):
-        """
-        NestedUNet: Level 1
-        """
-        x0_0, x0_0_downsampled = self.node0_0(input)
-        x1_0, x1_0_downsampled = self.node1_0(x0_0_downsampled)
-        x0_1 = self.node0_1(x1_0, [x0_0])
-        """
-        NestedUNet: Level 2
-        """
-        x2_0, x2_0_downsampled = self.node2_0(x1_0_downsampled)
-        x1_1 = self.node1_1(x2_0, [x1_0])
-        x0_2 = self.node0_2(x1_1, [x0_0, x0_1])
-        """
-        NestedUNet: Level 3
-        """
-        x3_0, x3_0_downsampled = self.node3_0(x2_0_downsampled)
-        x2_1 = self.node2_1(x3_0, [x2_0])
-        x1_2 = self.node1_2(x2_1, [x1_0, x1_1])
-        x0_3 = self.node0_3(x1_2, [x0_0, x0_1, x0_2])
-        """
-        NestedUNet: Level 4
-        """
-        x4_0, _ = self.node4_0(x3_0_downsampled)
-        x3_1 = self.node3_1(x4_0, [x3_0])
-        x2_2 = self.node2_2(x3_1, [x2_0, x2_1])
-        x1_3 = self.node1_3(x2_2, [x1_0, x1_1, x1_2])
-        x0_4 = self.node0_4(x1_3, [x0_0, x0_1, x0_2, x0_3])
-        """
-        NestedUNet: Deep Supervision
-        """
-        outputs = self.deep_supervision([x0_1, x0_2, x0_3, x0_4])
+        outputs = {}
+        inputs = {}
 
-        return outputs
+        # NestedUNet: Level 0
+        outputs["node0_0"], inputs["node1_0"] = self.nodes["node0_0"](input)
+        # NestedUNet: Level 1 ~ 4
+        for depth in range(1, 5):
+            # Encoder
+            enc_name = f"node{depth}_0"
+            outputs[enc_name], inputs[f"node{depth+1}_0"] = self.nodes[enc_name](
+                inputs[enc_name]
+            )
+
+            # Decoder
+            for stage in range(1, depth + 1):
+                dec_name = f"node{depth - stage}_{stage}"
+                skip_inputs = [
+                    outputs[f"node{depth - stage}_{k}"] for k in range(stage)
+                ]
+                outputs[dec_name] = self.nodes[dec_name](
+                    outputs[f"node{depth - stage + 1}_{stage - 1}"], skip_inputs
+                )
+
+        # NestedUNet: Deep Supervision
+        output = [outputs[f"node0_{level}"] for level in range(1, 5)]
+        if "deep_supervision" in self.nodes:
+            output = self.nodes["deep_supervision"](output)
+
+        return output
+
+    def _generate_default_layer_configs(self):
+        encoder_channels = [32, 64, 128, 256, 512]
+        layer_configs = {
+            "EncoderNode": {
+                "node0_0": {
+                    "in_channels": 1,
+                    "out_channels": encoder_channels[0],
+                    "sampling_method": "pool",
+                },
+                "node1_0": {
+                    "in_channels": encoder_channels[0],
+                    "out_channels": encoder_channels[1],
+                    "sampling_method": "pool",
+                },
+                "node2_0": {
+                    "in_channels": encoder_channels[1],
+                    "out_channels": encoder_channels[2],
+                    "sampling_method": "pool",
+                },
+                "node3_0": {
+                    "in_channels": encoder_channels[2],
+                    "out_channels": encoder_channels[3],
+                    "sampling_method": "pool",
+                },
+                "node4_0": {
+                    "in_channels": encoder_channels[3],
+                    "out_channels": encoder_channels[4],
+                    "sampling_method": "none",
+                },
+            },
+            "DecoderNode": {
+                # NestedUNet: Level 1 Decoder
+                "node0_1": {
+                    "in_channels": encoder_channels[0] + encoder_channels[1],
+                    "upsampling_in_channels": encoder_channels[1],
+                    "out_channels": encoder_channels[0],
+                    "sampling_method": "upsample",
+                },
+                # NestedUNet: Level 2 Decoder
+                "node1_1": {
+                    "in_channels": encoder_channels[1] + encoder_channels[2],
+                    "upsampling_in_channels": encoder_channels[2],
+                    "out_channels": encoder_channels[1],
+                    "sampling_method": "upsample",
+                },
+                "node0_2": {
+                    "in_channels": encoder_channels[0] * 2 + encoder_channels[1],
+                    "upsampling_in_channels": encoder_channels[1],
+                    "out_channels": encoder_channels[0],
+                    "sampling_method": "upsample",
+                },
+                # NestedUNet: Level 3 Decoder
+                "node2_1": {
+                    "in_channels": encoder_channels[2] + encoder_channels[3],
+                    "upsampling_in_channels": encoder_channels[3],
+                    "out_channels": encoder_channels[2],
+                    "sampling_method": "upsample",
+                },
+                "node1_2": {
+                    "in_channels": encoder_channels[1] * 2 + encoder_channels[2],
+                    "upsampling_in_channels": encoder_channels[2],
+                    "out_channels": encoder_channels[1],
+                    "sampling_method": "upsample",
+                },
+                "node0_3": {
+                    "in_channels": encoder_channels[0] * 3 + encoder_channels[1],
+                    "upsampling_in_channels": encoder_channels[1],
+                    "out_channels": encoder_channels[0],
+                    "sampling_method": "upsample",
+                },
+                # NestedUNet: Level 4 Decoder
+                "node3_1": {
+                    "in_channels": encoder_channels[3] + encoder_channels[4],
+                    "upsampling_in_channels": encoder_channels[4],
+                    "out_channels": encoder_channels[3],
+                    "sampling_method": "upsample",
+                },
+                "node2_2": {
+                    "in_channels": encoder_channels[2] * 2 + encoder_channels[3],
+                    "upsampling_in_channels": encoder_channels[3],
+                    "out_channels": encoder_channels[2],
+                    "sampling_method": "upsample",
+                },
+                "node1_3": {
+                    "in_channels": encoder_channels[1] * 3 + encoder_channels[2],
+                    "upsampling_in_channels": encoder_channels[2],
+                    "out_channels": encoder_channels[1],
+                    "sampling_method": "upsample",
+                },
+                "node0_4": {
+                    "in_channels": encoder_channels[0] * 4 + encoder_channels[1],
+                    "upsampling_in_channels": encoder_channels[1],
+                    "out_channels": encoder_channels[0],
+                    "sampling_method": "upsample",
+                },
+            },
+            "DeepSupervisionModule": {
+                "deep_supervision": {
+                    "in_channels": encoder_channels[0],
+                    "out_channels": 1,
+                    "num_level": 4,
+                },
+            },
+        }
+
+        return layer_configs
