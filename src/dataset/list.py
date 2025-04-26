@@ -12,9 +12,7 @@ from tqdm import tqdm
 def transform(sample, smooth=1e-8):
     sample = dict(sample)
     sample["image"] = np.clip(sample["image"], -1000, 500)
-    sample["image"] = (sample["image"] - np.mean(sample["image"])) / (
-        np.std(sample["image"]) + smooth
-    )
+    sample["image"] = (sample["image"] + 1000) / 1500 + smooth
     return sample
 
 
@@ -23,12 +21,14 @@ def get_dataloader(
     patient_ids,
     batch_size,
     transform=None,
+    data_filter=None,
     cache_slice_info_path=None,
 ):
     dataset = LiTSSliceDataset(
         src_dir=src_dir,
         patient_ids=patient_ids,
         transform=transform,
+        data_filter=data_filter,
         cache_slice_info_path=cache_slice_info_path,
     )
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
@@ -168,6 +168,7 @@ class LiTSSliceDataset(Dataset):
         patient_ids,
         transform=None,
         cache_slice_info_path=None,
+        data_filter=None,
         slice_axis=2,
     ):
         self.src_dir = Path(src_dir)
@@ -175,6 +176,7 @@ class LiTSSliceDataset(Dataset):
         self.transform = transform
         self.slice_axis = slice_axis
         self.slice_info = []
+        self.data_filter = data_filter
 
         if cache_slice_info_path is not None and Path(cache_slice_info_path).exists():
             self._load_slice_info(Path(cache_slice_info_path))
@@ -210,6 +212,10 @@ class LiTSSliceDataset(Dataset):
         for patient_id in self.patient_ids:
             slice_path_pattern = f"volume-{patient_id}_slice-*.npz_compressed.npz"
             slice_paths = sorted(self.src_dir.glob(slice_path_pattern))
+
+            if self.data_filter is not None:
+                slice_paths = self.data_filter(slice_paths)
+
             self.slice_info += slice_paths
 
     def __len__(self):
