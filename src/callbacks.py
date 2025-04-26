@@ -73,17 +73,29 @@ class EarlyStoppingCallback(Callback):
     def __init__(
         self,
         metric_fname,
+        mode,
         patience=5,
-        best_val_loss=float("inf"),
+        best_val_metric=None,
         best_epoch=None,
         last_wait=0,
     ):
+        if mode == "min":
+            self.is_better = lambda current: current < self.best_val_metric
+        elif mode == "max":
+            self.is_better = lambda current: current > self.best_val_metric
+        else:
+            raise ValueError(f"Invalid mode: {mode}. Must be 'min' or 'max'.")
+
         self.metric_fname = metric_fname
         self.patience = patience
-        self.best_val_loss = best_val_loss
         self.wait = last_wait
         self.best_epoch = best_epoch
         self.stopped_epoch = None
+
+        if best_val_metric is not None:
+            self.best_val_metric = best_val_metric
+        else:
+            self.best_val_metric = float("inf") if mode == "min" else -float("inf")
 
     def on_epoch_end(self, trainer, epoch, logs):
         val_loss = logs.get("val_metrics", None).get(self.metric_fname, None)
@@ -92,8 +104,8 @@ class EarlyStoppingCallback(Callback):
             print("[ERROR] Can not get validation loss")
             return
 
-        if val_loss < self.best_val_loss:
-            self.best_val_loss = val_loss
+        if self.is_better(val_loss):
+            self.best_val_metric = val_loss
             self.best_epoch = epoch
             self.wait = 0
             print("[INFO] New best model saved")
