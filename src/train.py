@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 
 from callbacks import EarlyStoppingCallback, LoggingCallback, SaveCheckpointCallback
-from dataset.list import get_dataloader, transform
+from dataset import list
 from loss_func import BCEDiceLoss, DiceLoss
 from metrics import f1_score, f2_score, get_metric_name, sensitivity, specificity
 from model import NestedUNet
@@ -70,14 +70,14 @@ def generate_layer_configs():
             },
         },
         "DecoderNode": {
-            # NestedUNet: Level 1 Decoder
+            # NestedUNet: Depth 1 Decoder
             "node0_1": {
                 "in_channels": encoder_channels[0] + encoder_channels[1],
                 "upsampling_in_channels": encoder_channels[1],
                 "out_channels": encoder_channels[0],
                 "sampling_method": "conv",
             },
-            # NestedUNet: Level 2 Decoder
+            # NestedUNet: Depth 2 Decoder
             "node1_1": {
                 "in_channels": encoder_channels[1] + encoder_channels[2],
                 "upsampling_in_channels": encoder_channels[2],
@@ -90,7 +90,7 @@ def generate_layer_configs():
                 "out_channels": encoder_channels[0],
                 "sampling_method": "conv",
             },
-            # NestedUNet: Level 3 Decoder
+            # NestedUNet: Depth 3 Decoder
             "node2_1": {
                 "in_channels": encoder_channels[2] + encoder_channels[3],
                 "upsampling_in_channels": encoder_channels[3],
@@ -109,7 +109,7 @@ def generate_layer_configs():
                 "out_channels": encoder_channels[0],
                 "sampling_method": "conv",
             },
-            # NestedUNet: Level 4 Decoder
+            # NestedUNet: Depth 4 Decoder
             "node3_1": {
                 "in_channels": encoder_channels[3] + encoder_channels[4],
                 "upsampling_in_channels": encoder_channels[4],
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     src_dir = Path("datasets/MICCAI 2017 LiTS/npz_compressed")
-    result_dir = Path("results/checkpoints/Test-Local-07")
+    result_dir = Path("results/checkpoints/Test-Local-08")
     result_dir.mkdir(parents=True, exist_ok=True)
     log_path = result_dir / "log.jsonl"
     checkpoint_path = None  # result_dir / "checkpoint-0003.pth"
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     num_epochs = 30
 
     model = NestedUNet(layer_configs=generate_layer_configs()).to(device)
-    loss_fn = BCEDiceLoss(alpha=0.5, beta=1)
+    loss_fn = BCEDiceLoss(alpha=1, beta=1)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     callbacks = [
         SaveCheckpointCallback(save_path=result_dir),
@@ -187,19 +187,19 @@ if __name__ == "__main__":
         loss_fn,
     ]
 
-    train_loader = get_dataloader(
+    train_loader = list.get_dataloader(
         src_dir=src_dir,
         patient_ids=train_patient_ids,
         batch_size=batch_size,
-        transform=transform,
+        transform=list.transform,
         data_filter=data_filter,
         cache_slice_info_path=train_slice_info_path,
     )
-    val_loader = get_dataloader(
+    val_loader = list.get_dataloader(
         src_dir=src_dir,
         patient_ids=val_patient_ids,
         batch_size=batch_size,
-        transform=transform,
+        transform=list.transform,
         cache_slice_info_path=val_slice_info_path,
     )
     if not train_slice_info_path.exists():
