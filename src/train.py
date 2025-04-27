@@ -14,6 +14,20 @@ from model import NestedUNet
 from trainer import NestedUNetTrainer
 
 
+def generate_dataset_indices(idx_range, train_size, val_size, test_size, seed=42):
+    all_indices = [i for i in idx_range(idx_range[0], idx_range[1] + 1)]
+    random.seed(seed)
+    random.shuffle(all_indices)
+
+    train_indices = all_indices[:train_size]
+    val_indices = all_indices[train_size : train_size + val_size]
+    test_indices = all_indices[
+        train_size + val_size : train_size + val_size + test_size
+    ]
+
+    return {"train": train_indices, "val": val_indices, "test": test_indices}
+
+
 def data_filter(paths):
     retain_empty_ratio = 0.25
 
@@ -157,8 +171,13 @@ if __name__ == "__main__":
     result_dir.mkdir(parents=True, exist_ok=True)
     log_path = result_dir / "log.jsonl"
     checkpoint_path = None  # result_dir / "checkpoint-0003.pth"
-    train_patient_ids = [i for i in range(0, 101)]
-    val_patient_ids = [i for i in range(101, 116)]
+    patient_ids = generate_dataset_indices(
+        idx_range=[0, 130],
+        train_size=100,
+        val_size=15,
+        test_size=15,
+        seed=42,
+    )
     train_slice_info_path = result_dir / "train_slice_info.pkl"
     val_slice_info_path = result_dir / "val_slice_info.pkl"
 
@@ -189,7 +208,7 @@ if __name__ == "__main__":
 
     train_loader = list.get_dataloader(
         src_dir=src_dir,
-        patient_ids=train_patient_ids,
+        patient_ids=patient_ids["train"],
         batch_size=batch_size,
         transform=list.transform,
         data_filter=data_filter,
@@ -197,7 +216,7 @@ if __name__ == "__main__":
     )
     val_loader = list.get_dataloader(
         src_dir=src_dir,
-        patient_ids=val_patient_ids,
+        patient_ids=patient_ids["val"],
         batch_size=batch_size,
         transform=list.transform,
         cache_slice_info_path=val_slice_info_path,
