@@ -73,9 +73,6 @@ class NestedUNetTrainer:
         callbacks,
         metric_fns=[],
     ):
-        if isinstance(metric_fns, list):
-            metric_fns.append(self.loss_fn)
-
         for cb in callbacks:
             cb.on_train_begin(self)
 
