@@ -156,9 +156,9 @@ class NestedUNet(nn.Module):
         outputs = {}
         inputs = {}
 
-        # NestedUNet: Level 0
+        # NestedUNet: Depth 0
         outputs["node0_0"], inputs["node1_0"] = self.nodes["node0_0"](input)
-        # NestedUNet: Level 1 ~ 4
+        # NestedUNet: Depth 1 ~ 4
         for depth in range(1, 5):
             # Encoder
             enc_name = f"node{depth}_0"
@@ -167,13 +167,13 @@ class NestedUNet(nn.Module):
             )
 
             # Decoder
-            for stage in range(1, depth + 1):
-                dec_name = f"node{depth - stage}_{stage}"
+            for level in range(1, depth + 1):
+                dec_name = f"node{depth - level}_{level}"
                 skip_inputs = [
-                    outputs[f"node{depth - stage}_{k}"] for k in range(stage)
+                    outputs[f"node{depth - level}_{k}"] for k in range(level)
                 ]
                 outputs[dec_name] = self.nodes[dec_name](
-                    outputs[f"node{depth - stage + 1}_{stage - 1}"], skip_inputs
+                    outputs[f"node{depth - level + 1}_{level - 1}"], skip_inputs
                 )
 
         # NestedUNet: Deep Supervision
@@ -214,14 +214,14 @@ class NestedUNet(nn.Module):
                 },
             },
             "DecoderNode": {
-                # NestedUNet: Level 1 Decoder
+                # NestedUNet: Depth 1 Decoder
                 "node0_1": {
                     "in_channels": encoder_channels[0] + encoder_channels[1],
                     "upsampling_in_channels": encoder_channels[1],
                     "out_channels": encoder_channels[0],
                     "sampling_method": "upsample",
                 },
-                # NestedUNet: Level 2 Decoder
+                # NestedUNet: Depth 2 Decoder
                 "node1_1": {
                     "in_channels": encoder_channels[1] + encoder_channels[2],
                     "upsampling_in_channels": encoder_channels[2],
@@ -234,7 +234,7 @@ class NestedUNet(nn.Module):
                     "out_channels": encoder_channels[0],
                     "sampling_method": "upsample",
                 },
-                # NestedUNet: Level 3 Decoder
+                # NestedUNet: Depth 3 Decoder
                 "node2_1": {
                     "in_channels": encoder_channels[2] + encoder_channels[3],
                     "upsampling_in_channels": encoder_channels[3],
@@ -253,7 +253,7 @@ class NestedUNet(nn.Module):
                     "out_channels": encoder_channels[0],
                     "sampling_method": "upsample",
                 },
-                # NestedUNet: Level 4 Decoder
+                # NestedUNet: Depth 4 Decoder
                 "node3_1": {
                     "in_channels": encoder_channels[3] + encoder_channels[4],
                     "upsampling_in_channels": encoder_channels[4],
